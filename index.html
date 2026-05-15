@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Notre Pain · Operações</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌾</text></svg>"/>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',system-ui,sans-serif;background:#f9fafb;}</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+//  🔧 COLE AQUI SUA CONFIG DO FIREBASE
+//     (veja o guia abaixo para obter esses valores)
+// ══════════════════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey:            "COLE_AQUI",
+  authDomain:        "COLE_AQUI",
+  databaseURL:       "COLE_AQUI",
+  projectId:         "COLE_AQUI",
+  storageBucket:     "COLE_AQUI",
+  messagingSenderId: "COLE_AQUI",
+  appId:             "COLE_AQUI"
+};
+// ══════════════════════════════════════════════════════════
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.database();
+
+window.dbSet = (key, val) => db.ref(key).set(val);
+window.dbListen = (key, cb) => {
+  const ref = db.ref(key);
+  ref.on("value", snap => cb(snap.exists() ? snap.val() : null));
+  return () => ref.off();
+};
+</script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const MASTER = "Lucas";
+const TEAM   = ["Lucas","Aline","Fabi","Edvaldo","Equipe"];
+const COLS   = [
+  { id:"aprovado",  label:"A Fazer",    color:"#d97706", bg:"#fef3c7" },
+  { id:"criacao",   label:"Em Criação", color:"#7c3aed", bg:"#f5f3ff" },
+  { id:"ativo",     label:"Ativo",      color:"#16a34a", bg:"#f0fdf4" },
+  { id:"concluido", label:"Concluído",  color:"#6b7280", bg:"#f3f4f6" },
+];
+const UNITS = ["Valinhos","Indaiatuba","Nova Campinas","Iguatemi","Todas"];
+const TYPES = ["Campanha de tráfego","Conteúdo / Post","Evento / Data especial","Vaga / Recrutamento","Promoção / Oferta","Outro"];
+const TRIGGERS = [
+  { id:"rain",    icon:"🌧", label:"Chuva",          action:"Delivery · café quente · ambiente aconchegante", color:"#2563eb" },
+  { id:"cold",    icon:"🍂", label:"Frio / outono",  action:"Pão quente · brunch · café colonial",            color:"#7c3aed" },
+  { id:"hot",     icon:"☀️", label:"Calor",          action:"Produtos frescos · bebidas geladas",             color:"#ea580c" },
+  { id:"pizza",   icon:"🍕", label:"Qua–Dom pizza",  action:"Reforço pizza · Valinhos + Indaiatuba",          color:"#dc2626" },
+  { id:"event",   icon:"🎪", label:"Evento local",   action:"Campanha regional por cidade",                   color:"#0d9488" },
+  { id:"special", icon:"❤️", label:"Data especial",  action:"Café colonial · brunch temático",                color:"#d97706" },
+  { id:"busy",    icon:"🔥", label:"Movimento alto", action:"Escassez · urgência · acabando",                 color:"#dc2626" },
+  { id:"low",     icon:"📉", label:"Movimento baixo",action:"Aceleração · oferta urgente",                    color:"#6b7280" },
+];
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,5);
+const ts  = () => new Date().toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+const UC  = {Valinhos:"#16a34a",Indaiatuba:"#2563eb","Nova Campinas":"#7c3aed",Iguatemi:"#d97706",Todas:"#374151"};
+
+const Pill = ({color,children}) => (
+  <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:20,background:color+"18",color,border:`1px solid ${color}44`,lineHeight:1.7,display:"inline-block"}}>{children}</span>
+);
+
+const Avatar = ({name,size=28}) => {
+  const clr={Lucas:"#d97706",Aline:"#7c3aed",Fabi:"#0d9488",Edvaldo:"#2563eb",Equipe:"#6b7280"};
+  const c=clr[name]||"#6b7280";
+  return <div style={{width:size,height:size,borderRadius:"50%",background:c+"22",border:`1.5px solid ${c}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*.38,fontWeight:700,color:c,flexShrink:0}}>{name?.[0]||"?"}</div>;
+};
+
+const StatusPill = ({status}) => {
+  const m={pendente:["#d97706","#fef3c7","⏳ Aguardando"],aprovado:["#16a34a","#f0fdf4","✅ Aprovado"],rejeitado:["#dc2626","#fff1f2","❌ Recusado"],ativo:["#2563eb","#eff6ff","🚀 Execução"],concluido:["#6b7280","#f3f4f6","🏁 Concluído"]};
+  const [c,bg,l]=m[status]||["#6b7280","#f3f4f6",status];
+  return <span style={{fontSize:10,fontWeight:600,padding:"2px 9px",borderRadius:20,background:bg,color:c,border:`1px solid ${c}44`}}>{l}</span>;
+};
+
+function WhoModal({onSelect}){
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:20}}>
+      <div style={{background:"#fff",borderRadius:18,padding:"2rem 1.75rem",width:"100%",maxWidth:340}}>
+        <div style={{textAlign:"center",marginBottom:20}}>
+          <div style={{fontSize:40,marginBottom:8}}>🌾</div>
+          <div style={{fontSize:17,fontWeight:700,color:"#111827"}}>Notre Pain · Operações</div>
+          <div style={{fontSize:12,color:"#6b7280",marginTop:4}}>Quem está acessando?</div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {TEAM.map(n=>(
+            <button key={n} onClick={()=>onSelect(n)}
+              style={{background:"#f9fafb",border:"1px solid #e5e7eb",borderRadius:10,padding:"11px 16px",fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:12,color:"#111827"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#fef3c7";e.currentTarget.style.borderColor="#d97706"}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#f9fafb";e.currentTarget.style.borderColor="#e5e7eb"}}>
+              <Avatar name={n}/>
+              <div style={{textAlign:"left"}}>
+                <div>{n}</div>
+                <div style={{fontSize:10,fontWeight:400,color:"#9ca3af"}}>{n===MASTER?"Master · aprovações + kanban":"Equipe · enviar solicitações"}</div>
+              </div>
+              {n===MASTER&&<span style={{marginLeft:"auto",fontSize:9,background:"#111827",color:"#fff",padding:"2px 7px",borderRadius:20}}>master</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CardModal({card,onSave,onClose,onDelete}){
+  const [f,setF]=useState(card);
+  const s=(k,v)=>setF(p=>({...p,[k]:v}));
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:500,padding:16}}>
+      <div style={{background:"#fff",borderRadius:14,padding:"1.5rem",width:"100%",maxWidth:440}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:14}}>
+          <b style={{fontSize:14,color:"#111827"}}>{card.id?"Editar card":"Novo card"}</b>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#9ca3af"}}>✕</button>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <input value={f.title||""} onChange={e=>s("title",e.target.value)} placeholder="Título *" style={{border:"1px solid #e5e7eb",borderRadius:8,padding:"9px 12px",fontSize:13}}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <select value={f.unit||"Valinhos"} onChange={e=>s("unit",e.target.value)} style={{border:"1px solid #e5e7eb",borderRadius:8,padding:"8px 10px",fontSize:12}}>{UNITS.map(u=><option key={u}>{u}</option>)}</select>
+            <select value={f.col||"aprovado"} onChange={e=>s("col",e.target.value)} style={{border:"1px solid #e5e7eb",borderRadius:8,padding:"8px 10px",fontSize:12}}>{COLS.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select>
+          </div>
+          <input value={f.budget||""} onChange={e=>s("budget",e.target.value)} placeholder="Verba ex: R$ 300/mês" style={{border:"1px solid #e5e7eb",borderRadius:8,padding:"8px 12px",fontSize:12}}/>
+          <textarea value={f.notes||""} onChange={e=>s("notes",e.target.value)} rows={3} placeholder="Notas…" style={{border:"1px solid #e5e7eb",borderRadius:8,padding:"8px 12px",fontSize:12,resize:"vertical",fontFamily:"inherit"}}/>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>f.title?.trim()&&onSave(f)} style={{flex:1,background:"#d97706",color:"#fff",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer"}}>{card.id?"Salvar":"Criar"}</button>
+            {card.id&&<button onClick={()=>onDelete(card.id)} style={{background:"#fff1f2",color:"#dc2626",border:"1px solid #dc2626",borderRadius:8,padding:"10px 14px",fontSize:12,cursor:"pointer"}}>Excluir</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App(){
+  const [user,setUser]=useState(null);
+  const [requests,setRequests]=useState([]);
+  const [cards,setCards]=useState([]);
+  const [feed,setFeed]=useState([]);
+  const [tab,setTab]=useState(null);
+  const [modal,setModal]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [reqForm,setReqForm]=useState({title:"",type:TYPES[0],unit:"Valinhos",description:"",urgent:false});
+  const [reqSent,setReqSent]=useState(false);
+  const [rejectId,setRejectId]=useState(null);
+  const [rejectNote,setRejectNote]=useState("");
+  const [feedText,setFeedText]=useState("");
+  const [trigText,setTrigText]=useState("");
+  const isMaster=user===MASTER;
+
+  useEffect(()=>{
+    if(!user)return;
+    setLoading(true);
+    const u1=window.dbListen("np_req",v=>setRequests(v&&Array.isArray(v)?v:v?Object.values(v):[]) );
+    const u2=window.dbListen("np_cards",v=>setCards(v&&Array.isArray(v)?v:v?Object.values(v):[]));
+    const u3=window.dbListen("np_feed",v=>setFeed(v&&Array.isArray(v)?v:v?Object.values(v):[]));
+    setTab(isMaster?"aprovacao":"solicitar");
+    setTimeout(()=>setLoading(false),1200);
+    return()=>{u1();u2();u3();};
+  },[user]);
+
+  function save(key,val){ setSaving(true); window.dbSet(key,val).finally(()=>setSaving(false)); }
+
+  function pf(item,cur=feed){
+    return [{...item,id:uid(),time:ts()},...cur].slice(0,100);
+  }
+
+  function submitReq(){
+    if(!reqForm.title.trim()||!reqForm.description.trim())return;
+    const r={...reqForm,id:uid(),ts:ts(),status:"pendente",author:user};
+    const nr=[...requests,r];
+    const nf=pf({type:"request",title:"📥 Nova: "+r.title,body:r.author+" · "+r.unit+(r.urgent?" · 🚨":""),author:user});
+    save("np_req",nr); save("np_feed",nf);
+    setReqForm({title:"",type:TYPES[0],unit:"Valinhos",description:"",urgent:false});
+    setReqSent(true); setTimeout(()=>setReqSent(false),3000);
+  }
+
+  function approve(id){
+    const r=requests.find(x=>x.id===id);
+    const nr=requests.map(x=>x.id===id?{...x,status:"aprovado"}:x);
+    const nc=[...cards,{id:uid(),title:r.title,unit:r.unit,type:r.type,notes:r.description,urgent:r.urgent,budget:"",col:"aprovado",createdBy:r.author}];
+    const nf=pf({type:"approve",title:"✅ Aprovado: "+r.title,body:r.author+" → Kanban",author:MASTER});
+    save("np_req",nr); save("np_cards",nc); save("np_feed",nf);
+  }
+
+  function reject(id,note){
+    const r=requests.find(x=>x.id===id);
+    const nr=requests.map(x=>x.id===id?{...x,status:"rejeitado",rejectNote:note}:x);
+    const nf=pf({type:"reject",title:"❌ Recusado: "+r.title,body:note||"Sem comentário",author:MASTER});
+    save("np_req",nr); save("np_feed",nf);
+    setRejectId(null); setRejectNote("");
+  }
+
+  function saveCard(f){
+    const isNew=!f.id;
+    const nc=isNew?[...cards,{...f,id:uid(),createdBy:user}]:cards.map(c=>c.id===f.id?f:c);
+    const nf=pf({type:"create",title:(isNew?"Card criado: ":"Atualizado: ")+f.title,body:f.unit,author:user});
+    save("np_cards",nc); save("np_feed",nf); setModal(null);
+  }
+
+  function deleteCard(id){
+    const card=cards.find(c=>c.id===id);
+    save("np_cards",cards.filter(c=>c.id!==id));
+    save("np_feed",pf({type:"note",title:"Removido: "+card?.title,body:"",author:user}));
+    setModal(null);
+  }
+
+  function moveCard(id,colId){
+    const card=cards.find(c=>c.id===id);
+    const nc=cards.map(c=>c.id===id?{...c,col:colId}:c);
+    const nf=pf({type:"move",title:'"'+card?.title+'" → '+COLS.find(c=>c.id===colId)?.label,body:card?.unit,author:user});
+    save("np_cards",nc); save("np_feed",nf);
+  }
+
+  function sendTrigger(t){
+    const nf=pf({type:"trigger",title:t.icon+" "+t.label,body:t.action,author:user});
+    save("np_feed",nf);
+  }
+
+  function postFeed(text){ const nf=pf({type:"note",title:text,body:"",author:user}); save("np_feed",nf); }
+
+  const pending=requests.filter(r=>r.status==="pendente");
+  const masterTabs=[
+    {id:"aprovacao",label:"Solicitações"+(pending.length>0?" ("+pending.length+")":""),urgent:pending.length>0},
+    {id:"kanban",label:"📋 Kanban"},
+    {id:"gatilhos",label:"⚡ Gatilhos"},
+    {id:"feed",label:"💬 Feed"},
+  ];
+  const memberTabs=[
+    {id:"solicitar",label:"📥 Solicitar"},
+    {id:"gatilhos",label:"⚡ Gatilhos"},
+    {id:"feed",label:"💬 Feed"},
+  ];
+  const tabs=isMaster?masterTabs:memberTabs;
+  const icons={request:"📥",approve:"✅",reject:"❌",move:"➡️",note:"💬",trigger:"⚡",create:"📣"};
+
+  if(!user)return <WhoModal onSelect={setUser}/>;
+
+  if(loading)return(
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",flexDirection:"column",gap:12}}>
+      <div style={{fontSize:36}}>🌾</div>
+      <div style={{fontSize:14,color:"#6b7280"}}>Carregando dados…</div>
+    </div>
+  );
+
+  return (
+    <div style={{fontFamily:"'Segoe UI',system-ui,sans-serif",background:"#f9fafb",minHeight:"100vh"}}>
+      {modal&&<CardModal card={modal} onSave={saveCard} onClose={()=>setModal(null)} onDelete={deleteCard}/>}
+
+      {/* HEADER */}
+      <div style={{background:"#111827",padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:22}}>🌾</span>
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:"#fff"}}>Notre Pain · Operações</div>
+            <div style={{fontSize:10,color:"#9ca3af"}}>Sistema compartilhado · Miranda Intelligence</div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          {saving&&<span style={{fontSize:10,color:"#9ca3af"}}>salvando…</span>}
+          <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.08)",borderRadius:8,padding:"5px 10px"}}>
+            <Avatar name={user} size={20}/>
+            <span style={{fontSize:11,color:"#d1d5db",fontWeight:600}}>{user}</span>
+            {isMaster&&<span style={{fontSize:9,background:"#d97706",color:"#fff",padding:"1px 6px",borderRadius:20,marginLeft:2}}>master</span>}
+            <button onClick={()=>setUser(null)} style={{background:"none",border:"none",color:"#9ca3af",fontSize:10,cursor:"pointer",marginLeft:4}}>trocar</button>
+          </div>
+          {isMaster&&<button onClick={()=>setModal({title:"",unit:"Valinhos",col:"aprovado",notes:"",budget:"",createdBy:user})} style={{background:"#d97706",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>+ Card manual</button>}
+        </div>
+      </div>
+
+      {/* TABS */}
+      <div style={{background:"#fff",borderBottom:"1px solid #e5e7eb",padding:"0 16px",display:"flex",overflowX:"auto"}}>
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{background:"none",border:"none",whiteSpace:"nowrap",borderBottom:tab===t.id?"2px solid #d97706":"2px solid transparent",padding:"11px 14px",fontSize:12,fontWeight:tab===t.id?700:400,color:t.urgent?"#dc2626":tab===t.id?"#d97706":"#6b7280",cursor:"pointer"}}>
+            {t.urgent?"🔴 ":""}{t.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{padding:14}}>
+
+        {/* SOLICITAR */}
+        {tab==="solicitar"&&(
+          <div style={{maxWidth:600,margin:"0 auto"}}>
+            <div style={{background:"#fff",borderRadius:14,border:"1px solid #e5e7eb",overflow:"hidden",marginBottom:16}}>
+              <div style={{background:"#111827",padding:"1rem 1.25rem"}}>
+                <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>Nova solicitação</div>
+                <div style={{fontSize:11,color:"#9ca3af",marginTop:2}}>Descreva o que precisa. Lucas vai receber e aprovar.</div>
+              </div>
+              <div style={{padding:"1.25rem",display:"flex",flexDirection:"column",gap:12}}>
+                <input placeholder="Título da solicitação *" value={reqForm.title} onChange={e=>setReqForm(f=>({...f,title:e.target.value}))} style={{border:"1px solid #e5e7eb",borderRadius:8,padding:"9px 12px",fontSize:13}}/>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <select value={reqForm.type} onChange={e=>setReqForm(f=>({...f,type:e.target.value}))} style={{border:"1px solid #e5e7eb",borderRadius:8,padding:"9px 10px",fontSize:12}}>{TYPES.map(t=><option key={t}>{t}</option>)}</select>
+                  <select value={reqForm.unit} onChange={e=>setReqForm(f=>({...f,unit:e.target.value}))} style={{border:"1px solid #e5e7eb",borderRadius:8,padding:"9px 10px",fontSize:12}}>{UNITS.map(u=><option key={u}>{u}</option>)}</select>
+                </div>
+                <textarea placeholder="Descreva em detalhes o que precisa. Quanto mais contexto, melhor. *" value={reqForm.description} onChange={e=>setReqForm(f=>({...f,description:e.target.value}))} rows={4} style={{border:"1px solid #e5e7eb",borderRadius:8,padding:"9px 12px",fontSize:12,resize:"vertical",fontFamily:"inherit"}}/>
+                <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
+                  <input type="checkbox" checked={reqForm.urgent} onChange={e=>setReqForm(f=>({...f,urgent:e.target.checked}))} style={{width:16,height:16}}/>
+                  <span style={{fontSize:12,color:"#dc2626",fontWeight:600}}>🚨 Urgente — executar o mais rápido possível</span>
+                </label>
+                {reqSent&&<div style={{background:"#f0fdf4",border:"1px solid #16a34a",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#166534",fontWeight:600}}>✅ Enviado! Lucas vai receber em breve.</div>}
+                <button onClick={submitReq} style={{background:"#d97706",color:"#fff",border:"none",borderRadius:8,padding:"11px",fontSize:13,fontWeight:700,cursor:"pointer"}}>Enviar solicitação</button>
+              </div>
+            </div>
+            <div style={{background:"#fff",borderRadius:14,border:"1px solid #e5e7eb",padding:"1rem 1.25rem"}}>
+              <div style={{fontSize:13,fontWeight:600,color:"#111827",marginBottom:12}}>Minhas solicitações <span style={{fontWeight:400,color:"#9ca3af"}}>({requests.filter(r=>r.author===user).length})</span></div>
+              {requests.filter(r=>r.author===user).length===0
+                ?<div style={{fontSize:12,color:"#9ca3af",textAlign:"center",padding:"20px 0"}}>Nenhuma ainda.</div>
+                :requests.filter(r=>r.author===user).slice().reverse().map(r=>(
+                  <div key={r.id} style={{borderBottom:"1px solid #f3f4f6",padding:"10px 0"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:8,marginBottom:4}}>
+                      <div style={{fontSize:12,fontWeight:600,color:"#111827",flex:1}}>{r.title}</div>
+                      {r.urgent&&<span style={{fontSize:10,background:"#fff1f2",color:"#dc2626",border:"1px solid #dc2626",borderRadius:20,padding:"1px 7px",fontWeight:700}}>🚨</span>}
+                    </div>
+                    <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:3}}><Pill color={UC[r.unit]||"#374151"}>{r.unit}</Pill><StatusPill status={r.status}/></div>
+                    {r.rejectNote&&<div style={{fontSize:11,color:"#dc2626",background:"#fff1f2",borderRadius:6,padding:"4px 8px",marginTop:3}}>Motivo: {r.rejectNote}</div>}
+                    <div style={{fontSize:10,color:"#9ca3af",marginTop:3}}>{r.ts}</div>
+                  </div>
+                ))
+              }
+            </div>
+          </div>
+        )}
+
+        {/* APROVACAO */}
+        {tab==="aprovacao"&&(
+          <div style={{maxWidth:700,margin:"0 auto"}}>
+            <div style={{background:"#fff",borderRadius:14,border:`1px solid ${pending.length?"#d97706":"#e5e7eb"}`,marginBottom:14,overflow:"hidden"}}>
+              <div style={{background:pending.length?"#111827":"#f9fafb",padding:"12px 1.25rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <b style={{fontSize:13,color:pending.length?"#fff":"#374151"}}>Fila de aprovação</b>
+                {pending.length>0&&<span style={{background:"#dc2626",color:"#fff",borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:700}}>{pending.length} pendente{pending.length>1?"s":""}</span>}
+              </div>
+              <div style={{padding:"0 1.25rem"}}>
+                {pending.length===0&&<div style={{fontSize:12,color:"#9ca3af",textAlign:"center",padding:"24px 0"}}>✅ Nenhuma pendente.</div>}
+                {pending.map(r=>(
+                  <div key={r.id} style={{borderBottom:"1px solid #f3f4f6",padding:"14px 0"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",gap:8,marginBottom:8}}>
+                      <div>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                          {r.urgent&&<span style={{fontSize:10,background:"#fff1f2",color:"#dc2626",border:"1px solid #dc2626",borderRadius:20,padding:"1px 7px",fontWeight:700}}>🚨 Urgente</span>}
+                          <b style={{fontSize:13,color:"#111827"}}>{r.title}</b>
+                        </div>
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:4}}><Avatar name={r.author} size={14}/><span style={{fontSize:11,color:"#6b7280"}}>{r.author}</span></div>
+                          <Pill color={UC[r.unit]||"#374151"}>{r.unit}</Pill>
+                          <Pill color="#374151">{r.type}</Pill>
+                        </div>
+                      </div>
+                      <span style={{fontSize:10,color:"#9ca3af",whiteSpace:"nowrap"}}>{r.ts}</span>
+                    </div>
+                    <div style={{background:"#f9fafb",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#374151",lineHeight:1.6,marginBottom:10}}>{r.description}</div>
+                    {rejectId===r.id?(
+                      <div style={{display:"flex",gap:8}}>
+                        <input value={rejectNote} onChange={e=>setRejectNote(e.target.value)} placeholder="Motivo da recusa…" style={{flex:1,border:"1px solid #e5e7eb",borderRadius:8,padding:"7px 10px",fontSize:12}}/>
+                        <button onClick={()=>reject(r.id,rejectNote)} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>Confirmar</button>
+                        <button onClick={()=>setRejectId(null)} style={{background:"#f3f4f6",color:"#374151",border:"none",borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer"}}>Cancelar</button>
+                      </div>
+                    ):(
+                      <div style={{display:"flex",gap:8}}>
+                        <button onClick={()=>approve(r.id)} style={{flex:1,background:"#16a34a",color:"#fff",border:"none",borderRadius:8,padding:"9px",fontSize:12,fontWeight:700,cursor:"pointer"}}>✅ Aprovar → vai pro Kanban</button>
+                        <button onClick={()=>setRejectId(r.id)} style={{background:"#fff1f2",color:"#dc2626",border:"1px solid #dc2626",borderRadius:8,padding:"9px 14px",fontSize:12,cursor:"pointer"}}>❌ Recusar</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {requests.filter(r=>r.status!=="pendente").length>0&&(
+              <div style={{background:"#fff",borderRadius:14,border:"1px solid #e5e7eb",padding:"1rem 1.25rem"}}>
+                <div style={{fontSize:12,fontWeight:600,color:"#374151",marginBottom:10}}>Histórico</div>
+                {requests.filter(r=>r.status!=="pendente").slice().reverse().map(r=>(
+                  <div key={r.id} style={{borderBottom:"1px solid #f3f4f6",padding:"8px 0",display:"flex",justifyContent:"space-between",gap:8}}>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:600,color:"#111827",marginBottom:3}}>{r.title}</div>
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}><Avatar name={r.author} size={13}/><span style={{fontSize:10,color:"#6b7280"}}>{r.author}</span><StatusPill status={r.status}/></div>
+                      {r.rejectNote&&<div style={{fontSize:10,color:"#dc2626",marginTop:2}}>Motivo: {r.rejectNote}</div>}
+                    </div>
+                    <span style={{fontSize:10,color:"#9ca3af",whiteSpace:"nowrap"}}>{r.ts}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* KANBAN */}
+        {tab==="kanban"&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,alignItems:"start"}}>
+            {COLS.map(col=>{
+              const cc=cards.filter(c=>c.col===col.id);
+              return(
+                <div key={col.id} style={{background:col.bg,border:`1px solid ${col.color}28`,borderRadius:12,padding:"10px 10px 8px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div style={{fontSize:10,fontWeight:700,color:col.color,textTransform:"uppercase",letterSpacing:".06em"}}>{col.label}</div>
+                    <span style={{background:col.color,color:"#fff",borderRadius:20,padding:"1px 6px",fontSize:10,fontWeight:700}}>{cc.length}</span>
+                  </div>
+                  {cc.length===0&&<div style={{fontSize:10,color:"#9ca3af",textAlign:"center",padding:"14px 0",borderRadius:8,border:"1px dashed #d1d5db"}}>vazio</div>}
+                  {cc.map(card=>(
+                    <div key={card.id} onClick={()=>setModal(card)}
+                      style={{background:"#fff",border:"1px solid #e5e7eb",borderLeft:`3px solid ${col.color}`,borderRadius:10,padding:"10px 12px",cursor:"pointer",marginBottom:6}}
+                      onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,.08)"}
+                      onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+                      <div style={{display:"flex",justifyContent:"space-between",gap:4,marginBottom:5}}>
+                        <div style={{fontSize:12,fontWeight:600,color:"#111827",lineHeight:1.4}}>{card.title}</div>
+                        {card.urgent&&<span style={{fontSize:12}}>🚨</span>}
+                      </div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:4}}>
+                        <Pill color={UC[card.unit]||"#374151"}>{card.unit}</Pill>
+                        {card.type&&<Pill color="#374151">{card.type}</Pill>}
+                        {card.budget&&<Pill color="#374151">💰 {card.budget}</Pill>}
+                      </div>
+                      {card.notes&&<div style={{fontSize:10,color:"#6b7280",lineHeight:1.5,marginBottom:4}}>{card.notes.slice(0,80)}{card.notes.length>80?"…":""}</div>}
+                      <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4}}><Avatar name={card.createdBy||"Equipe"} size={13}/><span style={{fontSize:10,color:"#9ca3af"}}>{card.createdBy}</span></div>
+                      <div style={{display:"flex",gap:3,marginTop:6,flexWrap:"wrap"}}>
+                        {COLS.filter(c=>c.id!==col.id).map(tc=>(
+                          <button key={tc.id} onClick={e=>{e.stopPropagation();moveCard(card.id,tc.id);}}
+                            style={{fontSize:9,padding:"2px 6px",border:`1px solid ${tc.color}55`,borderRadius:6,background:tc.bg,color:tc.color,cursor:"pointer"}}>
+                            → {tc.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={()=>setModal({title:"",unit:"Valinhos",col:col.id,notes:"",budget:"",createdBy:user})}
+                    style={{width:"100%",background:"none",border:"1px dashed #d1d5db",borderRadius:8,padding:"6px",fontSize:11,color:"#9ca3af",cursor:"pointer",marginTop:4}}>
+                    + adicionar
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* GATILHOS */}
+        {tab==="gatilhos"&&(
+          <div style={{maxWidth:680,margin:"0 auto"}}>
+            <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",padding:"1rem 1.25rem",marginBottom:14}}>
+              <b style={{fontSize:13,color:"#111827"}}>Gatilhos de contexto</b>
+              <div style={{fontSize:12,color:"#6b7280",marginTop:4,lineHeight:1.6}}>Clique para sinalizar o Lucas. Ele ajusta a campanha.</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:14}}>
+              {TRIGGERS.map(t=>(
+                <div key={t.id} onClick={()=>sendTrigger(t)}
+                  style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:10,padding:"10px 12px",cursor:"pointer"}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor=t.color;e.currentTarget.style.background="#fafafa";}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor="#e5e7eb";e.currentTarget.style.background="#fff";}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}>
+                    <span style={{fontSize:18}}>{t.icon}</span>
+                    <b style={{fontSize:12,color:t.color}}>{t.label}</b>
+                  </div>
+                  <div style={{fontSize:10,color:"#6b7280",lineHeight:1.5}}>{t.action}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",padding:"1rem 1.25rem"}}>
+              <b style={{fontSize:12,color:"#111827",display:"block",marginBottom:10}}>Contexto personalizado</b>
+              <div style={{display:"flex",gap:8}}>
+                <input value={trigText} onChange={e=>setTrigText(e.target.value)} placeholder="O que está acontecendo na loja…" onKeyDown={e=>e.key==="Enter"&&trigText.trim()&&(postFeed(trigText),setTrigText(""))} style={{flex:1,border:"1px solid #e5e7eb",borderRadius:8,padding:"9px 12px",fontSize:12}}/>
+                <button onClick={()=>{if(trigText.trim()){postFeed(trigText);setTrigText("");}}} style={{background:"#d97706",color:"#fff",border:"none",borderRadius:8,padding:"9px 16px",fontSize:12,fontWeight:600,cursor:"pointer"}}>Sinalizar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* FEED */}
+        {tab==="feed"&&(
+          <div style={{maxWidth:580,margin:"0 auto"}}>
+            <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",padding:"1rem 1.25rem",marginBottom:12}}>
+              <b style={{fontSize:12,color:"#111827",display:"block",marginBottom:10}}>Registrar mensagem</b>
+              <div style={{display:"flex",gap:8}}>
+                <textarea value={feedText} onChange={e=>setFeedText(e.target.value)} rows={2} placeholder="Ideia, pedido de ajuste, observação…" style={{flex:1,border:"1px solid #e5e7eb",borderRadius:8,padding:"8px 12px",fontSize:12,resize:"none",fontFamily:"inherit"}}/>
+                <button onClick={()=>{if(feedText.trim()){postFeed(feedText);setFeedText("");}}} style={{background:"#111827",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",alignSelf:"flex-end"}}>Enviar</button>
+              </div>
+            </div>
+            <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",padding:"1rem 1.25rem"}}>
+              <b style={{fontSize:12,color:"#111827",display:"block",marginBottom:10}}>Feed da equipe ({feed.length})</b>
+              {feed.length===0?<div style={{fontSize:12,color:"#9ca3af",textAlign:"center",padding:"24px 0"}}>Nenhuma atividade.</div>
+              :feed.map(item=>(
+                <div key={item.id} style={{display:"flex",gap:10,padding:"9px 0",borderBottom:"1px solid #f3f4f6"}}>
+                  <div style={{width:28,height:28,borderRadius:"50%",background:"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>{icons[item.type]||"📌"}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"#111827",lineHeight:1.4}}>{item.title}</div>
+                    {item.body&&<div style={{fontSize:11,color:"#6b7280",marginTop:1}}>{item.body}</div>}
+                    <div style={{display:"flex",alignItems:"center",gap:4,marginTop:3}}><Avatar name={item.author} size={13}/><span style={{fontSize:10,color:"#9ca3af"}}>{item.author} · {item.time}</span></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{textAlign:"center",padding:"1rem",fontSize:10,color:"#9ca3af",borderTop:"1px solid #f3f4f6",background:"#fff",marginTop:16}}>
+        Notre Pain · Operações · Miranda Intelligence
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+
+</body>
+</html>
